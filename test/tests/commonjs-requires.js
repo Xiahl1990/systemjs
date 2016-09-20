@@ -1,3 +1,6 @@
+exports.d6 = 
+/**/require('./commonjs-d2.js');
+
 exports.d1 = require(
   './commonjs-d.js'
 );
@@ -15,8 +18,6 @@ exports.d5 = 'text \'quote\' require("yet still not a dep")';
 
 var regexWithString = /asdfasdf " /;
 
-exports.d6 = require('./commonjs-d2.js');
-
 var regexClose = /asdf " */;
 
 // This comment triggered SystemJS to do a require because of this -> require('')
@@ -26,3 +27,14 @@ var p = false && require('" + "test" + "');
 
 // this line shouldn't be detected
 " = require(", "),\n        ";
+
+
+/*
+
+Unsolved breaking cases:
+
+var regex = /  "  /; var string = "  /* " // one line;
+require('asdf') // <- this will now be skipped as it will be in the '/*' comment
+*//*
+
+*/

@@ -190,7 +190,7 @@ System.config({
   Set a loader for this meta path.
 * [`sourceMap`](creating-plugins.md):
   For plugin transpilers to set the source map of their transpilation.
-* `scriptLoad`: Load the module using `<script>` tag injection.
+* `scriptLoad`: Set to `true` to load the module using `<script>` tag injection (`importScript()` in a worker context) instead of using `fetch` and `eval`. This enables [CSP](https://www.w3.org/TR/CSP2/) support but disables the native loading of CommonJS modules and global modules where the export name is not declared via metadata.
 * `nonce`: The [nonce](https://www.w3.org/TR/CSP2/#script-src-the-nonce-attribute) attribute to use when loading the script as a way to enable CSP.
   This should correspond to the "nonce-" attribute set in the Content-Security-Policy header.
 * `integrity`: The [subresource integrity](http://www.w3.org/TR/SRI/#the-integrity-attribute) attribute corresponding to the script integrity, describing the expected hash of the final code to be executed.
@@ -254,7 +254,7 @@ System.config({
 #### paths
 Type: `Object`
 
-The [ES6 Module Loader](https://github.com/ModuleLoader/es6-module-loader/blob/master/docs/loader-config.md) paths implementation, applied after normalization and supporting subpaths via wildcards.
+The [ES6 Module Loader](https://github.com/systemjs/systemjs/blob/master/docs/es6-modules-overview.md) paths implementation, applied after normalization and supporting subpaths via wildcards.
 
 _It is usually advisable to use map configuration over paths unless you need strict control over normalized module names._
 

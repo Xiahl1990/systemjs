@@ -159,6 +159,22 @@ asyncTest('Global script with exports as an array', function() {
   }, err);
 });
 
+asyncTest('Global with encapsulated execution', function() {
+  System.config({
+    meta: {
+      'tests/global-encapsulation.js': {
+        encapsulateGlobal: true
+      }
+    }
+  });
+
+  System['import']('tests/global-encapsulation.js').then(function(m) {
+    ok(m == 'encapsulated global');
+    ok(global.globalName === undefined);
+    start();
+  }, err);
+});
+
 if (!ie8)
 asyncTest('Meta should override meta syntax', function() {
   System.meta[System.normalizeSync('tests/meta-override.js')] = { format: 'esm' };
@@ -217,6 +233,30 @@ asyncTest('Contextual map configuration', function() {
     start();
   }, err);
 });
+
+asyncTest('Contextual map configuration for a package that is a file', function() {
+  System.config({
+    packages: {
+      'tests/jquery.js': {
+        meta: {
+          '*': {
+            deps: ['a']
+          }
+        },
+        map: {
+          'a': 'tests/amd-dep-A.js'
+        }
+      }
+    },
+    map: {
+      jquery: 'tests/jquery.js'
+    }
+  });
+  System['import']('tests/jquery.js').then(function(m) {
+    ok(m == 10);
+    start();
+  }, err);
+})
 
 asyncTest('Package map with shim', function() {
   System.config({
@@ -343,6 +383,29 @@ asyncTest('AMD contextual require toUrl', function() {
     start();
   }, err);
 });
+
+// TODO: fix!
+/* asyncTest('AMD race condition test', function() {
+  System.config({
+    bundles: {
+      "tests/out.js": ["tests/lib/modB.js"]
+    }
+  });
+
+  var completed = 0;
+  function completeImport() {
+    if (++completed == 3) {
+      ok(true);
+      start();
+    }
+  }
+
+  System.import('tests/modA.js').then(completeImport, err);
+  setTimeout(function () {
+    System.import('tests/modC.js').then(completeImport, err);
+    System.import('tests/lib/modB.js').then(completeImport, err);
+  }, 10);
+}); */
 
 asyncTest('Loading a CommonJS module', function() {
   System['import']('tests/common-js-module.js').then(function(m) {
@@ -786,6 +849,21 @@ asyncTest('Loading ES6 and AMD', function() {
   }, err);
 });
 
+asyncTest('ES module deps support', function() {
+  System.config({
+    meta: {
+      'tests/esm-with-deps.js': {
+        deps: ['tests/esm-dep.js']
+      }
+    }
+  });
+  System['import']('tests/esm-with-deps.js').then(function(m) {
+    ok(m.p == 5);
+    ok(global.esmDep == 'esm-dep');
+    start();
+  });
+});
+
 asyncTest('Module Name meta', function() {
   System['import']('tests/reflection.js').then(function(m) {
     ok(m.myname == System.normalizeSync('tests/reflection.js'), 'Module name not returned');
@@ -888,6 +966,19 @@ asyncTest("System clone", function() {
   }, err);
 });
 
+asyncTest('Custom loader instance System scoped', function() {
+  var customSystem = new System.constructor();
+
+  customSystem.baseURL = System.baseURL;
+  customSystem.paths = System.paths;
+  customSystem.transpiler = System.transpiler;
+  customSystem['import']('tests/loader-scoping.js')
+  .then(function(m) {
+    ok(m.loader == customSystem);
+    start();
+  }, err);;
+});
+
 if(typeof window !== 'undefined' && window.Worker) {
   asyncTest('Using SystemJS in a Web Worker', function() {
     var worker = new Worker('./tests/worker-' + System.transpiler + '.js');
@@ -930,6 +1021,22 @@ asyncTest('Globals', function() {
     for (var p in m)
       ok(false);
     ok(!global.$$$);
+    start();
+  }, err);
+});
+
+asyncTest('Scriptload precompiled global with exports still defined', function() {
+  System.config({
+    meta: {
+      'tests/global-single-compiled.js': {
+        scriptLoad: true,
+        exports: 'foobar',
+        format: typeof global != 'undefined' ? 'register' : 'global'
+      }
+    }
+  });
+  System['import']('tests/global-single-compiled.js').then(function(m) {
+    ok(m == 'foo');
     start();
   }, err);
 });
@@ -1078,6 +1185,112 @@ asyncTest('Package edge cases', function() {
   }, err);
 });
 
+asyncTest('Package map circular cases', function() {
+  System.config({
+    map: {
+      tp3: 'tests/testpkg3'
+    },
+    packages: {
+      'tests/testpkg3': {
+        map: {
+          './lib': './lib/asdf.js',
+          './lib/': './lib/index.js',
+          './lib/p': './lib/q.js',
+          './src/': './src/index.js',
+          './bin': './bin/index.js'
+        }
+      }
+    }
+  });
+
+  Promise.all([
+    System.normalize('tp3/lib'),
+    System.normalize('tp3/lib/'),
+    System.normalize('tp3/lib/q'),
+    System.normalize('tp3/lib/p'),
+    
+    System.normalize('../lib', System.baseURL + 'tests/testpkg3/asdf/x.js'),
+    System.normalize('../lib/', System.baseURL + 'tests/testpkg3/asdf/x.js'),
+    System.normalize('../lib/x', System.baseURL + 'tests/testpkg3/asdf/x.js'),
+    
+    System.normalize('.', System.baseURL + 'tests/testpkg3/lib/a'),
+    System.normalize('./', System.baseURL + 'tests/testpkg3/lib/x'),
+    System.normalize('./p', System.baseURL + 'tests/testpkg3/lib/x'),
+    System.normalize('./q', System.baseURL + 'tests/testpkg3/lib/x'),
+
+    System.normalize('./lib', System.baseURL + 'tests/testpkg3/x.js'),
+    System.normalize('./lib/', System.baseURL + 'tests/testpkg3/x.js'),
+    System.normalize('./lib/p', System.baseURL + 'tests/testpkg3/x.js'),
+    System.normalize('./lib/q', System.baseURL + 'tests/testpkg3/x.js'),
+
+    System.normalize('../lib/', System.baseURL + 'tests/testpkg3/lib/x.js'),
+    System.normalize('../lib/x', System.baseURL + 'tests/testpkg3/lib/x.js'),
+    System.normalize('tp3/lib/q', System.baseURL + 'tests/testpkg3/lib/x.js'),
+
+    System.normalize('./src', System.baseURL + 'tests/testpkg3/'),
+    System.normalize('./src/', System.baseURL + 'tests/testpkg3/'),
+    System.normalize('./src/x', System.baseURL + 'tests/testpkg3/'),
+
+    System.normalize('tp3/src'),
+    System.normalize('tp3/src/'),
+    System.normalize('tp3/src/x'),
+
+    System.normalize('./bin', System.baseURL + 'tests/testpkg3/'),
+    System.normalize('./bin/', System.baseURL + 'tests/testpkg3/'),
+    System.normalize('./bin/x', System.baseURL + 'tests/testpkg3/'),
+
+    System.normalize('tp3/bin'),
+    System.normalize('tp3/bin/'),
+    System.normalize('tp3/bin/x'),
+
+    System.normalize('.', System.baseURL + 'tests/testpkg3/bin/x')
+  ])
+  .then(function(n) {
+    ok(n[0] == System.baseURL + 'tests/testpkg3/lib/asdf.js');
+    ok(n[1] == System.baseURL + 'tests/testpkg3/lib/index.js');
+    ok(n[2] == System.baseURL + 'tests/testpkg3/lib/q.js');
+    ok(n[3] == System.baseURL + 'tests/testpkg3/lib/q.js');
+
+    ok(n[4] == System.baseURL + 'tests/testpkg3/lib/asdf.js');
+    ok(n[5] == System.baseURL + 'tests/testpkg3/lib/index.js');
+    ok(n[6] == System.baseURL + 'tests/testpkg3/lib/x.js');
+
+    ok(n[7] == System.baseURL + 'tests/testpkg3/lib/index.js');
+    ok(n[8] == System.baseURL + 'tests/testpkg3/lib/index.js');
+    ok(n[9] == System.baseURL + 'tests/testpkg3/lib/q.js');
+    ok(n[10] == System.baseURL + 'tests/testpkg3/lib/q.js');
+
+    ok(n[11] == System.baseURL + 'tests/testpkg3/lib/asdf.js');
+    ok(n[12] == System.baseURL + 'tests/testpkg3/lib/index.js');
+    ok(n[13] == System.baseURL + 'tests/testpkg3/lib/q.js');
+    ok(n[14] == System.baseURL + 'tests/testpkg3/lib/q.js');
+
+    ok(n[15] == System.baseURL + 'tests/testpkg3/lib/index.js');
+    ok(n[16] == System.baseURL + 'tests/testpkg3/lib/x.js');
+    ok(n[17] == System.baseURL + 'tests/testpkg3/lib/q.js');
+
+    ok(n[18] == System.baseURL + 'tests/testpkg3/src.js');
+    ok(n[19] == System.baseURL + 'tests/testpkg3/src/index.js');
+    ok(n[20] == System.baseURL + 'tests/testpkg3/src/x.js');
+
+    ok(n[21] == System.baseURL + 'tests/testpkg3/src.js');
+    ok(n[22] == System.baseURL + 'tests/testpkg3/src/index.js');
+    ok(n[23] == System.baseURL + 'tests/testpkg3/src/x.js');
+
+    ok(n[24] == System.baseURL + 'tests/testpkg3/bin/index.js');
+    ok(n[25] == System.baseURL + 'tests/testpkg3/bin/index.js');
+    ok(n[26] == System.baseURL + 'tests/testpkg3/bin/x.js');
+
+    ok(n[27] == System.baseURL + 'tests/testpkg3/bin/index.js');
+    ok(n[28] == System.baseURL + 'tests/testpkg3/bin/index.js');
+    ok(n[29] == System.baseURL + 'tests/testpkg3/bin/x.js');
+
+    ok(n[30] == System.baseURL + 'tests/testpkg3/bin/index.js');
+    start();
+  }, err);
+
+});
+
 if (!ie8)
 asyncTest('Conditional loading', function() {
   System.set('env', System.newModule({ 'browser': 'ie' }));
@@ -1198,7 +1411,7 @@ asyncTest('Package-local alias cjs', function() {
     start();
   });
 });
-  
+
 asyncTest('Package-local alias esm default export', function() {
   System.config({
     map: {
@@ -1244,7 +1457,6 @@ asyncTest('Package-local alias cjs default export', function() {
     start();
   });
 });
-
 
 
 })(typeof window == 'undefined' ? global : window);
